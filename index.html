@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LifeStory</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <section id="view-home" class="view active">
+        <div class="hero-screen">
+          <div class="hero-copy">
+            <p class="eyebrow">LifeStory</p>
+            <h1>像读一部小说一样，过完一段人生。</h1>
+            <p class="hero-text">
+              这是一个以长篇文本为核心的现代都市人生生成器。你主要做选择，故事负责生长。
+            </p>
+          </div>
+
+          <div class="hero-actions">
+            <button id="go-setup-btn" class="primary-button large-button">开始新人生</button>
+            <button id="go-settings-btn" class="ghost-button large-button">API 设置</button>
+            <button id="continue-btn" class="ghost-button large-button">继续上次人生</button>
+          </div>
+
+          <div class="home-footnote">
+            <p id="home-save-meta" class="muted">
+              当前没有存档。设置 API 后即可开始。页面为纯静态结构，可直接部署到 GitHub Pages。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-settings" class="view">
+        <div class="topbar">
+          <button data-view="home" class="back-button">返回</button>
+          <p class="topbar-title">API 设置</p>
+        </div>
+
+        <div class="content-wrap narrow">
+          <section class="panel spacious-panel">
+            <h2>模型连接</h2>
+            <p class="muted">
+              这些内容只保存在当前浏览器的本地存储中，适合你自己本地或 GitHub Pages 使用。
+            </p>
+
+            <label>
+              <span>Base URL</span>
+              <input id="base-url-input" type="text" placeholder="https://api.openai.com/v1" />
+            </label>
+            <label>
+              <span>模型名</span>
+              <input id="model-input" type="text" placeholder="gpt-4.1-mini" />
+            </label>
+            <label>
+              <span>API Key</span>
+              <input id="api-key-input" type="password" placeholder="sk-..." />
+            </label>
+
+            <div class="action-row">
+              <button id="save-settings-btn" class="primary-button">保存设置</button>
+              <button data-view="setup" class="ghost-button">去开局</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-setup" class="view">
+        <div class="topbar">
+          <button data-view="home" class="back-button">返回</button>
+          <p class="topbar-title">开局设定</p>
+        </div>
+
+        <div class="content-wrap">
+          <section class="panel spacious-panel">
+            <div class="setup-header">
+              <div>
+                <p class="eyebrow">Step By Step</p>
+                <h2>先决定这段人生从哪里开始</h2>
+              </div>
+              <button id="new-story-btn" class="primary-button">开始生成</button>
+            </div>
+
+            <div class="setup-section">
+              <div class="setup-title-wrap">
+                <h3>世界气质</h3>
+                <p class="muted">决定这座城市整体对人的反馈方式。</p>
+              </div>
+              <div id="world-tone-options" class="option-grid"></div>
+            </div>
+
+            <div class="setup-section">
+              <div class="setup-title-wrap">
+                <h3>家庭起点</h3>
+                <p class="muted">不是决定终点，而是决定你最早能看见什么。</p>
+              </div>
+              <div id="family-start-options" class="option-grid"></div>
+            </div>
+
+            <div class="setup-section">
+              <div class="setup-title-wrap">
+                <h3>天赋</h3>
+                <p class="muted">它影响你理解世界和被世界回应的方式。</p>
+              </div>
+              <div id="talent-options" class="option-grid"></div>
+            </div>
+
+            <div class="setup-section">
+              <div class="setup-title-wrap">
+                <h3>人生偏好</h3>
+                <p class="muted">这是叙事重心，不是唯一命运。</p>
+              </div>
+              <div id="life-focus-options" class="option-grid"></div>
+            </div>
+
+            <div class="setup-section">
+              <div class="setup-title-wrap">
+                <h3>文本长度</h3>
+                <p class="muted">每回合正文的篇幅偏好。</p>
+              </div>
+              <div id="text-length-options" class="option-grid compact-grid"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-story" class="view">
+        <div class="topbar">
+          <button data-view="home" class="back-button">主页</button>
+          <div class="story-headline">
+            <p id="story-title" class="story-title">还没有开始你的人生</p>
+            <div class="status-pill-row">
+              <span id="stage-pill" class="status-pill">未开始</span>
+              <span id="turn-pill" class="status-pill">第 0 回合</span>
+            </div>
+          </div>
+          <button id="export-btn" class="ghost-button">导出</button>
+        </div>
+
+        <div class="content-wrap story-layout">
+          <main class="story-column">
+            <section class="panel story-panel">
+              <div class="panel-header">
+                <h2>局势摘要</h2>
+                <span id="generation-status" class="muted">等待开始</span>
+              </div>
+              <p id="story-summary" class="summary-text muted">
+                进入故事后，这里会先告诉你目前人生所处的局势。
+              </p>
+            </section>
+
+            <section class="panel story-panel">
+              <div class="panel-header">
+                <h2>人生正文</h2>
+              </div>
+              <div id="story-content" class="story-content muted">
+                你会读到一段偏小说式的正文，而不是一套显眼的游戏数值。
+              </div>
+            </section>
+
+            <section class="panel story-panel">
+              <div class="panel-header">
+                <h2>你的选择</h2>
+              </div>
+              <div id="choices-container" class="choices-container">
+                <p class="muted">开始后这里会出现 3 到 4 个选项。</p>
+              </div>
+            </section>
+          </main>
+
+          <aside class="story-side">
+            <section class="panel story-panel">
+              <div class="panel-header">
+                <h2>主动干预</h2>
+                <span id="intervention-badge" class="status-pill subtle">0 次可用</span>
+              </div>
+              <p class="muted side-copy">
+                这是少量、动态获得的额外人生推动机会。输入的是你的意图，不是强制结果。
+              </p>
+              <textarea
+                id="intervention-input"
+                rows="5"
+                placeholder="例如：我想再争取一次，不想就这样和她分开。"
+              ></textarea>
+            </section>
+
+            <section class="panel story-panel">
+              <h2>后台状态摘要</h2>
+              <div id="state-preview" class="state-preview muted">故事开始后会在这里显示后台状态摘要。</div>
+            </section>
+
+            <section class="panel story-panel">
+              <h2>存档信息</h2>
+              <div id="save-meta" class="save-meta muted">当前没有存档。</div>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
