@@ -356,6 +356,10 @@ label span {
   padding: 0.2rem 0.15rem 0.6rem;
   scroll-behavior: smooth;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 
 .story-stream.busy {
