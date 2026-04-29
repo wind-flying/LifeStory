@@ -2,8 +2,10 @@ import { generateNextTurn, generateOpening } from "./engine.js";
 import {
   buildExportText,
   createEmptyStory,
+  getReadableUnitCount,
   loadSettings,
   loadStory,
+  normalizeStory,
   saveSettings,
   saveStory,
 } from "./state.js";
@@ -63,13 +65,13 @@ const elements = {
   stagePill: document.getElementById("stage-pill"),
   turnPill: document.getElementById("turn-pill"),
   generationStatus: document.getElementById("generation-status"),
-  storySummary: document.getElementById("story-summary"),
-  storyContent: document.getElementById("story-content"),
+  storyStream: document.getElementById("story-stream"),
+  loadingIndicator: document.getElementById("loading-indicator"),
   choicesContainer: document.getElementById("choices-container"),
+  revealNextBtn: document.getElementById("reveal-next-btn"),
   interventionInput: document.getElementById("intervention-input"),
   interventionBadge: document.getElementById("intervention-badge"),
   saveMeta: document.getElementById("save-meta"),
-  statePreview: document.getElementById("state-preview"),
 };
 
 let apiSettings = loadSettings();
@@ -99,6 +101,8 @@ function bindEvents() {
   });
 
   elements.newStoryBtn.addEventListener("click", startNewStory);
+  elements.revealNextBtn.addEventListener("click", handleRevealOrContinue);
+  elements.storyStream.addEventListener("click", revealNextUnit);
   elements.continueBtn.addEventListener("click", () => {
     currentStory = loadStory();
     renderStory(currentStory);
@@ -221,9 +225,44 @@ async function handleChoice(choice) {
   });
 }
 
+async function handleRevealOrContinue() {
+  if (!currentStory || isBusy) {
+    return;
+  }
+
+  const totalUnits = getReadableUnitCount(currentStory);
+  if ((currentStory.reader.revealed_units ?? 0) < totalUnits) {
+    revealNextUnit();
+    return;
+  }
+
+  if (currentStory.current_decision || currentStory.meta.is_finished) {
+    return;
+  }
+
+  await continueNarration();
+}
+
+async function continueNarration() {
+  apiSettings = readApiSettings();
+  if (!validateApiSettings(apiSettings)) {
+    showView("settings");
+    return;
+  }
+
+  await runGeneration(async () => {
+    currentStory = await generateNextTurn(currentStory, apiSettings, null, null);
+    saveStory(currentStory);
+    renderStory(currentStory);
+    setStatus(currentStory.meta.is_finished ? "故事已收束。" : "已生成下一段人生。");
+  });
+}
+
 async function runGeneration(task) {
   isBusy = true;
   setControlsDisabled(true);
+  elements.revealNextBtn.disabled = true;
+  elements.loadingIndicator.hidden = false;
   setStatus("正在调用模型生成内容...");
 
   try {
@@ -233,7 +272,11 @@ async function runGeneration(task) {
     setStatus(error.message || "生成失败。");
   } finally {
     isBusy = false;
+    elements.loadingIndicator.hidden = true;
     setControlsDisabled(false);
+    if (currentStory) {
+      updateRevealButton(currentStory);
+    }
   }
 }
 
@@ -258,25 +301,25 @@ function renderStory(story) {
     return;
   }
 
-  elements.storyTitle.textContent = story.current_scene.title || "一段尚未成形的人生";
-  elements.stagePill.textContent = story.meta.current_stage || "未开始";
-  elements.turnPill.textContent = `第 ${story.meta.current_turn} 回合`;
-  elements.storySummary.textContent = story.current_scene.summary || "暂无摘要。";
+  currentStory = normalizeStory(story);
+  const latestSegment = currentStory.segments.at(-1);
 
-  const content = story.meta.is_finished && story.ending
-    ? `${story.current_scene.content}\n\n【人生结语】\n${story.ending.epilogue}\n\n【故事评价】\n${formatEvaluation(story.ending.evaluation)}`
-    : story.current_scene.content || "暂无正文。";
+  elements.storyTitle.textContent = latestSegment?.title || "一段正在展开的人生";
+  elements.stagePill.textContent = currentStory.meta.current_stage || "未开始";
+  elements.turnPill.textContent = `第 ${currentStory.meta.current_turn} 回合`;
 
-  elements.storyContent.textContent = content;
-
-  renderChoices(story);
-  renderStatePreview(story);
-  renderSaveMeta(story);
-  renderIntervention(story);
+  renderStoryStream(currentStory);
+  renderChoices(currentStory);
+  renderSaveMeta(currentStory);
+  renderIntervention(currentStory);
+  updateRevealButton(currentStory);
+  scrollStoryToBottom();
 }
 
 function renderChoices(story) {
   elements.choicesContainer.innerHTML = "";
+  const totalUnits = getReadableUnitCount(story);
+  const allRevealed = (story.reader.revealed_units ?? 0) >= totalUnits;
 
   if (story.meta.is_finished) {
     const message = document.createElement("p");
@@ -286,7 +329,28 @@ function renderChoices(story) {
     return;
   }
 
-  for (const choice of story.current_scene.choices ?? []) {
+  if (!allRevealed) {
+    const message = document.createElement("p");
+    message.className = "muted";
+    message.textContent = "继续阅读，故事会在关键节点停下来。";
+    elements.choicesContainer.appendChild(message);
+    return;
+  }
+
+  if (!story.current_decision) {
+    const message = document.createElement("p");
+    message.className = "muted";
+    message.textContent = "这一段人生还没有需要你决定的节点。";
+    elements.choicesContainer.appendChild(message);
+    return;
+  }
+
+  const prompt = document.createElement("p");
+  prompt.className = "decision-prompt";
+  prompt.textContent = story.current_decision.prompt;
+  elements.choicesContainer.appendChild(prompt);
+
+  for (const choice of story.current_decision.choices ?? []) {
     const button = document.createElement("button");
     button.className = "choice-button";
     button.textContent = choice;
@@ -305,38 +369,13 @@ function renderIntervention(story) {
       : "当前没有可用的主动干预机会。随着人生积累，它可能在后续获得。";
 }
 
-function renderStatePreview(story) {
-  const facts = (story.story_memory.confirmed_facts ?? []).slice(-3);
-  const events = (story.story_memory.major_events ?? []).slice(-3);
-  const people = (story.relationships ?? []).slice(0, 4).map((person) => {
-    const role = person.role ? `（${person.role}）` : "";
-    const relation = person.relationship_summary ? `：${person.relationship_summary}` : "";
-    return `${person.name || "未命名人物"}${role}${relation}`;
-  });
-
-  elements.statePreview.textContent = [
-    `主角：${story.protagonist.name || "未定"}，${story.protagonist.age || "?"} 岁，${story.protagonist.current_role || "身份待定"}`,
-    `驱动力：${story.protagonist.career_drive || "未定"} / ${story.protagonist.emotion_drive || "未定"}`,
-    `社会资本：${story.protagonist.social_capital || "未定"}，压力：${story.protagonist.stress_level || "未定"}`,
-    "",
-    "近期关键事实：",
-    ...(facts.length ? facts.map((fact) => `- ${fact}`) : ["- 暂无"]),
-    "",
-    "近期重大事件：",
-    ...(events.length ? events.map((event) => `- ${event}`) : ["- 暂无"]),
-    "",
-    "重要人物：",
-    ...(people.length ? people.map((person) => `- ${person}`) : ["- 暂无"]),
-  ].join("\n");
-}
-
 function renderSaveMeta(story) {
   const text = [
     `故事编号：${story.meta.story_id}`,
     `世界类型：${story.world_state.genre}`,
     `创建时间：${formatDate(story.meta.created_at)}`,
     `最近更新：${formatDate(story.meta.updated_at)}`,
-    `章节数：${story.chapters.length}`,
+    `片段数：${story.segments.length}`,
   ].join("\n");
 
   elements.saveMeta.textContent = text;
@@ -347,18 +386,129 @@ function renderEmpty() {
   elements.storyTitle.textContent = "还没有开始你的人生";
   elements.stagePill.textContent = "未开始";
   elements.turnPill.textContent = "第 0 回合";
-  elements.storySummary.textContent =
-    "选择开局设定后，系统会生成主角背景、当前局势和第一段人生正文。";
-  elements.storyContent.textContent =
-    "你看到的会是一段偏小说式的叙事，而不是数值游戏界面。";
-  elements.choicesContainer.innerHTML = '<p class="muted">开始后这里会出现 3 到 4 个选项。</p>';
+  elements.storyStream.innerHTML = '<p class="muted">故事开始后会在这里向下展开。</p>';
+  elements.choicesContainer.innerHTML = '<p class="muted">读到关键节点时，这里会出现选择。</p>';
+  elements.revealNextBtn.textContent = "继续阅读";
+  elements.revealNextBtn.disabled = true;
   elements.interventionBadge.textContent = "0 次可用";
   elements.interventionInput.disabled = true;
   elements.interventionInput.placeholder = "当前没有可用的主动干预机会。";
-  elements.statePreview.textContent = "故事开始后会在这里显示后台状态摘要。";
   elements.saveMeta.textContent = "当前没有存档。";
   elements.homeSaveMeta.textContent =
     "当前没有存档。设置 API 后即可开始。页面为纯静态结构，可直接部署到 GitHub Pages。";
+}
+
+function renderStoryStream(story) {
+  elements.storyStream.innerHTML = "";
+  const visibleUnits = flattenStoryUnits(story).slice(0, story.reader.revealed_units ?? 0);
+
+  if (!visibleUnits.length) {
+    elements.storyStream.innerHTML = '<p class="muted">点击“继续阅读”，故事会逐段展开。</p>';
+    return;
+  }
+
+  for (const unit of visibleUnits) {
+    if (unit.type === "choice") {
+      const choice = document.createElement("div");
+      choice.className = "story-choice-record";
+      choice.textContent = unit.text;
+      elements.storyStream.appendChild(choice);
+      continue;
+    }
+
+    const paragraph = document.createElement("article");
+    paragraph.className = "story-unit";
+
+    if (unit.showHeader) {
+      const header = document.createElement("div");
+      header.className = "story-unit-header";
+      header.textContent = [unit.title, unit.age_range].filter(Boolean).join(" · ");
+      paragraph.appendChild(header);
+    }
+
+    const text = document.createElement("p");
+    text.textContent = unit.text;
+    paragraph.appendChild(text);
+    elements.storyStream.appendChild(paragraph);
+  }
+
+  if (story.meta.is_finished && story.ending && visibleUnits.length >= getReadableUnitCount(story)) {
+    const ending = document.createElement("article");
+    ending.className = "story-unit ending-unit";
+    const header = document.createElement("div");
+    header.className = "story-unit-header";
+    header.textContent = "人生结语";
+    const epilogue = document.createElement("p");
+    epilogue.textContent = story.ending.epilogue ?? "";
+    const evaluation = document.createElement("p");
+    evaluation.textContent = formatEvaluation(story.ending.evaluation);
+    ending.append(header, epilogue, evaluation);
+    elements.storyStream.appendChild(ending);
+  }
+}
+
+function flattenStoryUnits(story) {
+  return (story.segments ?? []).flatMap((segment) => {
+    if (segment.type === "choice") {
+      return [{ type: "choice", text: segment.text }];
+    }
+
+    const paragraphs = segment.paragraphs?.length ? segment.paragraphs : [segment.summary].filter(Boolean);
+    return paragraphs.map((paragraph, index) => ({
+      type: "paragraph",
+      title: segment.title,
+      age_range: segment.age_range,
+      text: paragraph,
+      showHeader: index === 0 && Boolean(segment.title || segment.age_range),
+    }));
+  });
+}
+
+function revealNextUnit() {
+  if (!currentStory || isBusy) {
+    return;
+  }
+
+  const totalUnits = getReadableUnitCount(currentStory);
+  if ((currentStory.reader.revealed_units ?? 0) >= totalUnits) {
+    return;
+  }
+
+  currentStory.reader.revealed_units += 1;
+  saveStory(currentStory);
+  renderStory(currentStory);
+}
+
+function updateRevealButton(story) {
+  const totalUnits = getReadableUnitCount(story);
+  const revealed = story.reader.revealed_units ?? 0;
+
+  if (story.meta.is_finished) {
+    elements.revealNextBtn.textContent = "这一生已经写完";
+    elements.revealNextBtn.disabled = true;
+    return;
+  }
+
+  if (revealed < totalUnits) {
+    elements.revealNextBtn.textContent = "继续阅读";
+    elements.revealNextBtn.disabled = false;
+    return;
+  }
+
+  if (story.current_decision) {
+    elements.revealNextBtn.textContent = "等待选择";
+    elements.revealNextBtn.disabled = true;
+    return;
+  }
+
+  elements.revealNextBtn.textContent = "继续人生";
+  elements.revealNextBtn.disabled = false;
+}
+
+function scrollStoryToBottom() {
+  requestAnimationFrame(() => {
+    elements.storyStream.scrollTop = elements.storyStream.scrollHeight;
+  });
 }
 
 function exportStory() {

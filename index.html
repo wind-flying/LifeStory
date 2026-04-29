@@ -140,32 +140,28 @@
 
         <div class="content-wrap story-layout">
           <main class="story-column">
-            <section class="panel story-panel">
-              <div class="panel-header">
-                <h2>局势摘要</h2>
-                <span id="generation-status" class="muted">等待开始</span>
-              </div>
-              <p id="story-summary" class="summary-text muted">
-                进入故事后，这里会先告诉你目前人生所处的局势。
-              </p>
-            </section>
-
-            <section class="panel story-panel">
+            <section class="panel story-panel reading-panel">
               <div class="panel-header">
                 <h2>人生正文</h2>
+                <span id="generation-status" class="muted">等待开始</span>
               </div>
-              <div id="story-content" class="story-content muted">
-                你会读到一段偏小说式的正文，而不是一套显眼的游戏数值。
+              <div id="story-stream" class="story-stream" aria-live="polite">
+                <p class="muted">故事开始后会在这里向下展开。</p>
+              </div>
+              <div id="loading-indicator" class="loading-indicator" hidden>
+                <span class="loading-dot"></span>
+                <span>命运正在继续书写...</span>
               </div>
             </section>
 
             <section class="panel story-panel">
               <div class="panel-header">
-                <h2>你的选择</h2>
+                <h2>下一步</h2>
               </div>
               <div id="choices-container" class="choices-container">
-                <p class="muted">开始后这里会出现 3 到 4 个选项。</p>
+                <p class="muted">读到关键节点时，这里会出现选择。</p>
               </div>
+              <button id="reveal-next-btn" class="primary-button full-button">继续阅读</button>
             </section>
           </main>
 
@@ -183,11 +179,6 @@
                 rows="5"
                 placeholder="例如：我想再争取一次，不想就这样和她分开。"
               ></textarea>
-            </section>
-
-            <section class="panel story-panel">
-              <h2>后台状态摘要</h2>
-              <div id="state-preview" class="state-preview muted">故事开始后会在这里显示后台状态摘要。</div>
             </section>
 
             <section class="panel story-panel">

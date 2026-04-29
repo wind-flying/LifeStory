@@ -25,7 +25,8 @@ export function saveSettings(settings) {
 
 export function loadStory() {
   try {
-    return JSON.parse(localStorage.getItem(STORY_KEY)) ?? null;
+    const story = JSON.parse(localStorage.getItem(STORY_KEY)) ?? null;
+    return story ? normalizeStory(story) : null;
   } catch {
     return null;
   }
@@ -80,6 +81,8 @@ export function createEmptyStory(settings) {
     },
     relationships: [],
     story_memory: {
+      long_summary: "",
+      recent_summary: "",
       confirmed_facts: [],
       major_events: [],
       open_threads: [],
@@ -93,14 +96,38 @@ export function createEmptyStory(settings) {
       pending_intent: null,
       past_interventions: [],
     },
-    chapters: [],
-    current_scene: {
-      title: "",
-      summary: "",
-      content: "",
-      choices: [],
+    reader: {
+      revealed_units: 0,
     },
+    segments: [],
+    current_decision: null,
   };
+}
+
+export function normalizeStory(story) {
+  const next = structuredClone(story);
+
+  next.story_memory = {
+    long_summary: "",
+    recent_summary: "",
+    confirmed_facts: [],
+    major_events: [],
+    open_threads: [],
+    foreshadowing: [],
+    resolved_threads: [],
+    forbidden_conflicts: [],
+    ...(next.story_memory ?? {}),
+  };
+
+  next.reader = {
+    revealed_units: 0,
+    ...(next.reader ?? {}),
+  };
+
+  next.segments = Array.isArray(next.segments) ? next.segments : [];
+  next.current_decision = next.current_decision ?? null;
+
+  return next;
 }
 
 export function mergeStoryState(story, patch) {
@@ -136,23 +163,56 @@ function deepMerge(target, source) {
 }
 
 export function buildExportText(story) {
+  const normalized = normalizeStory(story);
   const lines = [];
   lines.push("《LifeStory 人生记录》");
   lines.push("");
-  lines.push(`故事编号：${story.meta.story_id}`);
-  lines.push(`世界类型：${story.world_state.genre}`);
-  lines.push(`当前阶段：${story.meta.current_stage}`);
-  lines.push(`当前回合：${story.meta.current_turn}`);
+  lines.push(`故事编号：${normalized.meta.story_id}`);
+  lines.push(`世界类型：${normalized.world_state.genre}`);
+  lines.push(`当前阶段：${normalized.meta.current_stage}`);
+  lines.push(`当前回合：${normalized.meta.current_turn}`);
   lines.push("");
 
-  for (const chapter of story.chapters) {
-    lines.push(`# ${chapter.title}`);
+  for (const segment of normalized.segments) {
+    if (segment.type === "choice") {
+      lines.push(`【选择】${segment.text}`);
+      lines.push("");
+      continue;
+    }
+
+    if (segment.title) {
+      lines.push(`# ${segment.title}`);
+      lines.push("");
+    }
+
+    if (segment.age_range) {
+      lines.push(`【时间】${segment.age_range}`);
+      lines.push("");
+    }
+
+    for (const paragraph of segment.paragraphs ?? []) {
+      lines.push(paragraph);
+      lines.push("");
+    }
+  }
+
+  if (normalized.ending) {
+    lines.push("# 人生结语");
     lines.push("");
-    lines.push(`【局势】${chapter.summary}`);
-    lines.push("");
-    lines.push(chapter.content);
+    lines.push(normalized.ending.epilogue ?? "");
     lines.push("");
   }
 
   return lines.join("\n");
+}
+
+export function getReadableUnitCount(story) {
+  return (story.segments ?? []).reduce((total, segment) => {
+    if (segment.type === "choice") {
+      return total + 1;
+    }
+
+    const paragraphCount = (segment.paragraphs ?? []).filter(Boolean).length;
+    return total + (paragraphCount || (segment.summary ? 1 : 0));
+  }, 0);
 }

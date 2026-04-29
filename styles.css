@@ -303,7 +303,7 @@ label span {
 
 .story-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.9fr);
+  grid-template-columns: minmax(0, 1.9fr) minmax(260px, 0.75fr);
   gap: 1rem;
 }
 
@@ -314,9 +314,6 @@ label span {
   gap: 1rem;
 }
 
-.summary-text,
-.story-content,
-.state-preview,
 .save-meta,
 .side-copy {
   margin: 0;
@@ -324,14 +321,80 @@ label span {
   white-space: pre-wrap;
 }
 
-.story-content {
-  min-height: 300px;
-  font-size: 1.03rem;
+.reading-panel {
+  min-height: min(68vh, 760px);
+}
+
+.story-stream {
+  max-height: min(62vh, 680px);
+  overflow-y: auto;
+  padding: 0.2rem 0.15rem 0.6rem;
+  scroll-behavior: smooth;
+}
+
+.story-unit {
+  animation: rise-in 0.22s ease both;
+  border-bottom: 1px solid var(--line);
+  padding: 0.9rem 0 1rem;
+}
+
+.story-unit:first-child {
+  padding-top: 0;
+}
+
+.story-unit p {
+  margin: 0;
+  line-height: 2;
+  font-size: 1.04rem;
+}
+
+.story-unit-header {
+  margin-bottom: 0.45rem;
+  color: var(--accent-strong);
+  font-size: 0.86rem;
+}
+
+.story-choice-record {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.9rem 0;
+  padding: 0.75rem 0.95rem;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  line-height: 1.7;
+}
+
+.ending-unit {
+  border-bottom: 0;
+}
+
+.loading-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  color: var(--muted);
+}
+
+.loading-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse-dot 1s ease-in-out infinite;
 }
 
 .choices-container {
   display: grid;
   gap: 0.8rem;
+  margin-bottom: 0.85rem;
+}
+
+.decision-prompt {
+  margin: 0;
+  line-height: 1.8;
+  color: var(--ink);
 }
 
 .choice-button {
@@ -361,6 +424,35 @@ label span {
 .status-pill.subtle {
   background: var(--green-soft);
   color: var(--green);
+}
+
+.full-button {
+  width: 100%;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.88);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @media (max-width: 900px) {
@@ -401,7 +493,11 @@ label span {
     grid-template-columns: 1fr;
   }
 
-  .story-content {
-    min-height: 220px;
+  .reading-panel {
+    min-height: 54vh;
+  }
+
+  .story-stream {
+    max-height: 52vh;
   }
 }
