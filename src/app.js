@@ -64,6 +64,7 @@ const elements = {
   storyTitle: document.getElementById("story-title"),
   readerMeta: document.getElementById("reader-meta"),
   storyStream: document.getElementById("story-stream"),
+  readerTapLayer: document.getElementById("reader-tap-layer"),
   loadingIndicator: document.getElementById("loading-indicator"),
   tapHint: document.getElementById("tap-hint"),
   decisionPanel: document.getElementById("decision-panel"),
@@ -97,7 +98,7 @@ function bindEvents() {
   });
 
   elements.newStoryBtn.addEventListener("click", startNewStory);
-  elements.storyStream.addEventListener("click", handleReaderTap);
+  elements.readerTapLayer.addEventListener("click", handleReaderTap);
   elements.continueBtn.addEventListener("click", () => {
     currentStory = loadStory();
     renderStory(currentStory);
@@ -282,7 +283,8 @@ function setControlsDisabled(disabled) {
   elements.newStoryBtn.disabled = disabled;
   elements.continueBtn.disabled = disabled;
   elements.exportBtn.disabled = disabled;
-  elements.storyStream.classList.toggle("busy", disabled);
+  elements.readerTapLayer.disabled = disabled;
+  elements.readerTapLayer.classList.toggle("busy", disabled);
 }
 
 function renderStory(story) {
