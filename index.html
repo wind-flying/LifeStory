@@ -126,25 +126,15 @@
       </section>
 
       <section id="view-story" class="view">
-        <div class="topbar">
-          <button data-view="home" class="back-button">主页</button>
-          <div class="story-headline">
-            <p id="story-title" class="story-title">还没有开始你的人生</p>
-            <div class="status-pill-row">
-              <span id="stage-pill" class="status-pill">未开始</span>
-              <span id="turn-pill" class="status-pill">第 0 回合</span>
-            </div>
-          </div>
-          <button id="export-btn" class="ghost-button">导出</button>
-        </div>
-
         <div class="content-wrap story-layout">
           <main class="story-column">
             <section class="panel story-panel reading-panel">
-              <div class="panel-header">
-                <h2>人生正文</h2>
-                <span id="generation-status" class="muted">等待开始</span>
+              <div class="reader-toolbar">
+                <button data-view="home" class="icon-text-button">主页</button>
+                <span id="story-title" class="reader-title">还没有开始你的人生</span>
+                <button id="export-btn" class="icon-text-button">导出</button>
               </div>
+              <div id="reader-meta" class="reader-meta muted">未开始 · 第 0 回合 · 等待开始</div>
               <div id="story-stream" class="story-stream" aria-live="polite">
                 <p class="muted">故事开始后会在这里向下展开。</p>
               </div>
@@ -152,40 +142,15 @@
                 <span class="loading-dot"></span>
                 <span>命运正在继续书写...</span>
               </div>
+              <div id="tap-hint" class="tap-hint muted">点击正文继续</div>
             </section>
 
-            <section class="panel story-panel">
-              <div class="panel-header">
-                <h2>下一步</h2>
-              </div>
+            <section id="decision-panel" class="panel story-panel decision-panel" hidden>
               <div id="choices-container" class="choices-container">
                 <p class="muted">读到关键节点时，这里会出现选择。</p>
               </div>
-              <button id="reveal-next-btn" class="primary-button full-button">继续阅读</button>
             </section>
           </main>
-
-          <aside class="story-side">
-            <section class="panel story-panel">
-              <div class="panel-header">
-                <h2>主动干预</h2>
-                <span id="intervention-badge" class="status-pill subtle">0 次可用</span>
-              </div>
-              <p class="muted side-copy">
-                这是少量、动态获得的额外人生推动机会。输入的是你的意图，不是强制结果。
-              </p>
-              <textarea
-                id="intervention-input"
-                rows="5"
-                placeholder="例如：我想再争取一次，不想就这样和她分开。"
-              ></textarea>
-            </section>
-
-            <section class="panel story-panel">
-              <h2>存档信息</h2>
-              <div id="save-meta" class="save-meta muted">当前没有存档。</div>
-            </section>
-          </aside>
         </div>
       </section>
     </div>

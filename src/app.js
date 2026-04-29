@@ -62,16 +62,12 @@ const elements = {
   continueBtn: document.getElementById("continue-btn"),
   exportBtn: document.getElementById("export-btn"),
   storyTitle: document.getElementById("story-title"),
-  stagePill: document.getElementById("stage-pill"),
-  turnPill: document.getElementById("turn-pill"),
-  generationStatus: document.getElementById("generation-status"),
+  readerMeta: document.getElementById("reader-meta"),
   storyStream: document.getElementById("story-stream"),
   loadingIndicator: document.getElementById("loading-indicator"),
+  tapHint: document.getElementById("tap-hint"),
+  decisionPanel: document.getElementById("decision-panel"),
   choicesContainer: document.getElementById("choices-container"),
-  revealNextBtn: document.getElementById("reveal-next-btn"),
-  interventionInput: document.getElementById("intervention-input"),
-  interventionBadge: document.getElementById("intervention-badge"),
-  saveMeta: document.getElementById("save-meta"),
 };
 
 let apiSettings = loadSettings();
@@ -101,8 +97,7 @@ function bindEvents() {
   });
 
   elements.newStoryBtn.addEventListener("click", startNewStory);
-  elements.revealNextBtn.addEventListener("click", handleRevealOrContinue);
-  elements.storyStream.addEventListener("click", revealNextUnit);
+  elements.storyStream.addEventListener("click", handleReaderTap);
   elements.continueBtn.addEventListener("click", () => {
     currentStory = loadStory();
     renderStory(currentStory);
@@ -190,7 +185,7 @@ async function startNewStory() {
   });
 }
 
-async function handleChoice(choice) {
+async function handleChoice(choice, interventionIntent = null) {
   if (isBusy || !currentStory || currentStory.meta.is_finished) {
     return;
   }
@@ -200,10 +195,6 @@ async function handleChoice(choice) {
     showView("settings");
     return;
   }
-
-  const available = currentStory.intervention_state.available_chances ?? 0;
-  const interventionIntent =
-    available > 0 ? elements.interventionInput.value.trim() || null : null;
 
   await runGeneration(async () => {
     currentStory = await generateNextTurn(currentStory, apiSettings, choice, interventionIntent);
@@ -216,7 +207,6 @@ async function handleChoice(choice) {
           intent: interventionIntent,
         },
       ];
-      elements.interventionInput.value = "";
     }
 
     saveStory(currentStory);
@@ -225,7 +215,7 @@ async function handleChoice(choice) {
   });
 }
 
-async function handleRevealOrContinue() {
+async function handleReaderTap() {
   if (!currentStory || isBusy) {
     return;
   }
@@ -261,7 +251,6 @@ async function continueNarration() {
 async function runGeneration(task) {
   isBusy = true;
   setControlsDisabled(true);
-  elements.revealNextBtn.disabled = true;
   elements.loadingIndicator.hidden = false;
   setStatus("正在调用模型生成内容...");
 
@@ -275,7 +264,7 @@ async function runGeneration(task) {
     elements.loadingIndicator.hidden = true;
     setControlsDisabled(false);
     if (currentStory) {
-      updateRevealButton(currentStory);
+      updateTapHint(currentStory);
     }
   }
 }
@@ -293,6 +282,7 @@ function setControlsDisabled(disabled) {
   elements.newStoryBtn.disabled = disabled;
   elements.continueBtn.disabled = disabled;
   elements.exportBtn.disabled = disabled;
+  elements.storyStream.classList.toggle("busy", disabled);
 }
 
 function renderStory(story) {
@@ -305,14 +295,12 @@ function renderStory(story) {
   const latestSegment = currentStory.segments.at(-1);
 
   elements.storyTitle.textContent = latestSegment?.title || "一段正在展开的人生";
-  elements.stagePill.textContent = currentStory.meta.current_stage || "未开始";
-  elements.turnPill.textContent = `第 ${currentStory.meta.current_turn} 回合`;
+  renderReaderMeta(currentStory);
 
   renderStoryStream(currentStory);
   renderChoices(currentStory);
   renderSaveMeta(currentStory);
-  renderIntervention(currentStory);
-  updateRevealButton(currentStory);
+  updateTapHint(currentStory);
   scrollStoryToBottom();
 }
 
@@ -320,31 +308,21 @@ function renderChoices(story) {
   elements.choicesContainer.innerHTML = "";
   const totalUnits = getReadableUnitCount(story);
   const allRevealed = (story.reader.revealed_units ?? 0) >= totalUnits;
+  elements.decisionPanel.hidden = true;
 
   if (story.meta.is_finished) {
-    const message = document.createElement("p");
-    message.className = "muted";
-    message.textContent = "这一生已经写完了。你可以导出全文，或者重新开始一段新人生。";
-    elements.choicesContainer.appendChild(message);
     return;
   }
 
   if (!allRevealed) {
-    const message = document.createElement("p");
-    message.className = "muted";
-    message.textContent = "继续阅读，故事会在关键节点停下来。";
-    elements.choicesContainer.appendChild(message);
     return;
   }
 
   if (!story.current_decision) {
-    const message = document.createElement("p");
-    message.className = "muted";
-    message.textContent = "这一段人生还没有需要你决定的节点。";
-    elements.choicesContainer.appendChild(message);
     return;
   }
 
+  elements.decisionPanel.hidden = false;
   const prompt = document.createElement("p");
   prompt.className = "decision-prompt";
   prompt.textContent = story.current_decision.prompt;
@@ -357,16 +335,30 @@ function renderChoices(story) {
     button.addEventListener("click", () => handleChoice(choice));
     elements.choicesContainer.appendChild(button);
   }
+
+  const chances = story.intervention_state.available_chances ?? 0;
+  if (chances > 0) {
+    const button = document.createElement("button");
+    button.className = "choice-button intervention-choice";
+    button.textContent = "主动干预一次";
+    button.addEventListener("click", handleInterventionChoice);
+    elements.choicesContainer.appendChild(button);
+  }
 }
 
-function renderIntervention(story) {
-  const chances = story.intervention_state.available_chances ?? 0;
-  elements.interventionBadge.textContent = `${chances} 次可用`;
-  elements.interventionInput.disabled = chances <= 0 || story.meta.is_finished;
-  elements.interventionInput.placeholder =
-    chances > 0
-      ? "输入一句你想主动推动的事，系统会尝试按当前人生状态把它转成合理剧情。"
-      : "当前没有可用的主动干预机会。随着人生积累，它可能在后续获得。";
+function handleInterventionChoice() {
+  if (!currentStory?.current_decision || isBusy) {
+    return;
+  }
+
+  const intent = window.prompt("你想主动推动什么？输入一句意图，不是强制结果。");
+  const interventionIntent = intent?.trim();
+
+  if (!interventionIntent) {
+    return;
+  }
+
+  handleChoice("主动干预", interventionIntent);
 }
 
 function renderSaveMeta(story) {
@@ -378,22 +370,15 @@ function renderSaveMeta(story) {
     `片段数：${story.segments.length}`,
   ].join("\n");
 
-  elements.saveMeta.textContent = text;
   elements.homeSaveMeta.textContent = text;
 }
 
 function renderEmpty() {
   elements.storyTitle.textContent = "还没有开始你的人生";
-  elements.stagePill.textContent = "未开始";
-  elements.turnPill.textContent = "第 0 回合";
+  elements.readerMeta.textContent = "未开始 · 第 0 回合 · 等待开始";
   elements.storyStream.innerHTML = '<p class="muted">故事开始后会在这里向下展开。</p>';
-  elements.choicesContainer.innerHTML = '<p class="muted">读到关键节点时，这里会出现选择。</p>';
-  elements.revealNextBtn.textContent = "继续阅读";
-  elements.revealNextBtn.disabled = true;
-  elements.interventionBadge.textContent = "0 次可用";
-  elements.interventionInput.disabled = true;
-  elements.interventionInput.placeholder = "当前没有可用的主动干预机会。";
-  elements.saveMeta.textContent = "当前没有存档。";
+  elements.decisionPanel.hidden = true;
+  elements.tapHint.textContent = "开始故事后点击正文继续";
   elements.homeSaveMeta.textContent =
     "当前没有存档。设置 API 后即可开始。页面为纯静态结构，可直接部署到 GitHub Pages。";
 }
@@ -479,30 +464,26 @@ function revealNextUnit() {
   renderStory(currentStory);
 }
 
-function updateRevealButton(story) {
+function updateTapHint(story) {
   const totalUnits = getReadableUnitCount(story);
   const revealed = story.reader.revealed_units ?? 0;
 
   if (story.meta.is_finished) {
-    elements.revealNextBtn.textContent = "这一生已经写完";
-    elements.revealNextBtn.disabled = true;
+    elements.tapHint.textContent = "这一生已经写完";
     return;
   }
 
   if (revealed < totalUnits) {
-    elements.revealNextBtn.textContent = "继续阅读";
-    elements.revealNextBtn.disabled = false;
+    elements.tapHint.textContent = "点击正文继续阅读";
     return;
   }
 
   if (story.current_decision) {
-    elements.revealNextBtn.textContent = "等待选择";
-    elements.revealNextBtn.disabled = true;
+    elements.tapHint.textContent = "请选择一个方向";
     return;
   }
 
-  elements.revealNextBtn.textContent = "继续人生";
-  elements.revealNextBtn.disabled = false;
+  elements.tapHint.textContent = "点击正文继续人生";
 }
 
 function scrollStoryToBottom() {
@@ -528,7 +509,19 @@ function exportStory() {
 }
 
 function setStatus(message) {
-  elements.generationStatus.textContent = message;
+  if (currentStory) {
+    renderReaderMeta(currentStory, message);
+  } else {
+    elements.readerMeta.textContent = `未开始 · 第 0 回合 · ${message}`;
+  }
+}
+
+function renderReaderMeta(story, status = elements.readerMeta.textContent.split(" · ").at(-1)) {
+  elements.readerMeta.textContent = [
+    story.meta.current_stage || "未开始",
+    `第 ${story.meta.current_turn} 回合`,
+    status || "等待开始",
+  ].join(" · ");
 }
 
 function showView(name) {
